@@ -1,0 +1,138 @@
+YOLO on CPU
+The big advantage of running YOLO on the CPU is that it’s really easy to set up and it works right away on Opencv withouth doing any further installations. You only need Opencv 3.4.2 or greater.
+
+The disadvantage is that YOLO, as any deep neural network runs really slow on a CPU and we will be able to process only a few frames per second.
+Not really good for a realtime detection
+
+
+
+YOLO on GPU
+
+Instead YOLO on a GPU is really fast, and with a good gpu you can process 45 or more frames per seconds.
+So we’re not talking about a small speed difference between a CPU and a GPU, but a huge difference where the GPU greatly outperform the CPU by 20 times faster or more.
+
+The disadvantage is that for a beginner setting up a deep neural network on a GPU can be a really harsh process.
+Also it doesn’t work with all the GPUs but only with NVIDIA GPUs wich are compatible with CUDA.
+For example right now I’m using a laptop with an AMD Radeon GPU, so it won’t work.
+
+
+
+
+
+
+
+
+#We import the libraries and we load the Network
+
+import cv2
+import numpy as np
+import time
+
+
+# Load Yolo
+
+net = cv2.dnn.readNet("weights/yolov3-tiny.weights", "cfg/yolov3-tiny.cfg")
+classes = []
+with open("coco.names", "r") as f:
+    classes = [line.strip() for line in f.readlines()]
+layer_names = net.getLayerNames()
+output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+colors = np.random.uniform(0, 255, size=(len(classes), 3))
+
+
+
+#We then load the the camera.       We get the starting time and the frame ID in order to calculate later how many frames per second FPS we are processing.
+
+# Loading camera
+cap = cv2.VideoCapture(0)
+
+font = cv2.FONT_HERSHEY_PLAIN
+starting_time = time.time()
+frame_id = 0
+
+
+#We run the while loop and we extract the frame from the camera.
+
+while True:
+    _, frame = cap.read()
+    frame_id += 1
+
+    height, width, channels = frame.shape   
+
+
+
+#We perform the detection.
+# Detecting objects
+    blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+
+    net.setInput(blob)
+    outs = net.forward(output_layers)
+
+
+# Showing informations on the screen
+    class_ids = []
+    confidences = []
+    boxes = []
+    for out in outs:
+        for detection in out:
+            scores = detection[5:]
+            class_id = np.argmax(scores)
+            confidence = scores[class_id]
+            if confidence > 0.2:
+                # Object detected
+                center_x = int(detection[0] * width)
+                center_y = int(detection[1] * height)
+                w = int(detection[2] * width)
+                h = int(detection[3] * height)
+
+                # Rectangle coordinates
+                x = int(center_x - w / 2)
+                y = int(center_y - h / 2)
+
+                boxes.append([x, y, w, h])
+                confidences.append(float(confidence))
+                class_ids.append(class_id)
+
+    indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.4, 0.3)
+
+    for i in range(len(boxes)):
+        if i in indexes:
+            x, y, w, h = boxes[i]
+            label = str(classes[class_ids[i]])
+            confidence = confidences[i]
+            color = colors[class_ids[i]]
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            cv2.rectangle(frame, (x, y), (x + w, y + 30), color, -1)
+            cv2.putText(frame, label + " " + str(round(confidence, 2)), (x, y + 30), font, 3, (255,255,255), 3)
+
+
+
+
+
+#calculate the FPS by deviding the elapsed time by the number of the frames and we show everything on the screen.
+
+    elapsed_time = time.time() - starting_time
+    fps = frame_id / elapsed_time
+    cv2.putText(frame, "FPS: " + str(round(fps, 2)), (10, 50), font, 3, (0, 0, 0), 3)
+    cv2.imshow("Image", frame)
+    key = cv2.waitKey(1)
+    if key == 27:
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
